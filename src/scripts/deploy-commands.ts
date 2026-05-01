@@ -1,7 +1,6 @@
 import { REST, Routes } from 'discord.js';
 import * as fs from 'fs';
 import * as path from 'path';
-import { pathToFileURL } from 'url';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 
@@ -9,34 +8,29 @@ async function deploy(): Promise<void> {
   const commands: unknown[] = [];
   const commandsPath = path.join(__dirname, '..', 'commands');
 
-  const loadDir = async (dir: string): Promise<void> => {
+  const loadDir = (dir: string): void => {
     const files = fs.readdirSync(dir);
     for (const file of files) {
       const fullPath = path.join(dir, file);
       const stat = fs.statSync(fullPath);
       if (stat.isDirectory()) {
-        await loadDir(fullPath);
+        loadDir(fullPath);
       } else if (file.endsWith('.ts') || file.endsWith('.js')) {
         try {
-          const modulePath = pathToFileURL(fullPath).href;
-          const imported = await import(modulePath);
-          const command = imported.default ?? imported;
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const command = require(fullPath).default;
           if (command?.data?.toJSON) {
             commands.push(command.data.toJSON());
             logger.info(`Komut hazırlandı: ${command.data.name}`);
           }
         } catch (err) {
-          logger.error(`Komut okunamadı: ${file}`, {
-            message: err instanceof Error ? err.message : String(err),
-            stack: err instanceof Error ? err.stack : undefined,
-            err,
-          });
+          logger.error(`Komut okunamadı: ${file}`, { err });
         }
       }
     }
   };
 
-  if (fs.existsSync(commandsPath)) await loadDir(commandsPath);
+  if (fs.existsSync(commandsPath)) loadDir(commandsPath);
 
   const rest = new REST({ version: '10' }).setToken(config.token);
 
